@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CYBER-TRANSLATOR // 神經網路翻譯終端 [終極版]</title>
+    <!-- 引入 Vue 3 CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        cyber: { bg: '#0a0b10', card: '#121420', border: '#1f293d', primary: '#00f2fe', secondary: '#fe019a', neon: '#05ffa1' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* 科技感背景與掃描線 */
+        body {
+            background-color: #05060b;
+            background-image: 
+                radial-gradient(circle at 50% 0%, #1a1c2e 0%, transparent 50%),
+                linear-gradient(rgba(0, 242, 254, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 242, 254, 0.03) 1px, transparent 1px);
+            background-size: 100% 100%, 30px 30px, 30px 30px;
+        }
+        .scanlines {
+            position: fixed; inset: 0; pointer-events: none; z-index: 50;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.2));
+            background-size: 100% 4px; opacity: 0.3;
+        }
+        /* 霓虹發光特效 */
+        .neon-box {
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.1), inset 0 0 20px rgba(0, 242, 254, 0.05);
+            border: 1px solid rgba(0, 242, 254, 0.3);
+        }
+        .neon-text { text-shadow: 0 0 8px rgba(0, 242, 254, 0.6); }
+        .neon-text-pink { text-shadow: 0 0 8px rgba(254, 1, 154, 0.6); }
+        /* 自訂捲軸 */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #00f2fe; }
+        /* 游標閃爍動畫 (打字機用) */
+        .cursor-blink { animation: blink 1s step-end infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+        /* 列表動畫 */
+        .list-enter-active, .list-leave-active { transition: all 0.5s ease; }
+        .list-enter-from, .list-leave-to { opacity: 0; transform: translateX(30px); }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen font-sans p-4 md:p-8 flex flex-col items-center justify-center selection:bg-cyber-secondary selection:text-white">
+<div class="scanlines"></div> <!-- 螢幕掃描線特效 -->
+
+<div id="app" class="w-full max-w-6xl relative z-10">
+    
+    <!-- 頂部系統狀態 -->
+    <header class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-cyber-border pb-4 relative">
+        <div class="absolute bottom-0 left-0 w-1/3 h-[1px] bg-gradient-to-r from-cyber-primary to-transparent"></div>
+        <div>
+            <div class="flex items-center gap-3 mb-1">
+                <span class="text-cyber-primary text-3xl animate-pulse">⚝</span>
+                <h1 class="text-3xl font-black tracking-widest bg-clip-text text-transparent bg-gradient-to-r from-cyber-primary to-cyber-secondary neon-text">
+                    NEXUS TRANSLATOR
+                </h1>
+            </div>
+            <span class="text-xs font-mono text-cyan-400/70 uppercase tracking-[0.3em] pl-10 block">Deep-Learning API Module // V_9.0.1</span>
+        </div>
+        <div class="flex gap-3 text-[10px] font-mono uppercase tracking-wider">
+            <div class="bg-black/60 border border-cyber-border px-3 py-1.5 rounded flex items-center gap-2 text-slate-400">
+                Data Log: <span class="text-cyber-primary">{{ history.length }}</span>
+            </div>
+            <div class="bg-black/60 border border-cyber-border px-3 py-1.5 rounded flex items-center gap-2 text-cyber-neon">
+                <span class="w-2 h-2 bg-cyber-neon rounded-full animate-ping"></span> API Linked
+            </div>
+        </div>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- 左側：翻譯引擎 (佔 8 格) -->
+        <div class="lg:col-span-8 flex flex-col gap-6">
+            
+            <!-- 控制列 (語言切換) -->
+            <div class="flex items-center justify-between bg-cyber-card/60 backdrop-blur border border-cyber-border p-3 rounded-lg shadow-lg">
+                <div class="flex-1 flex justify-center">
+                    <select v-model="langFrom" class="bg-transparent text-cyber-primary font-mono text-sm outline-none cursor-pointer text-center appearance-none w-full">
+                        <option value="en">ENGLISH (英文)</option>
+                        <option value="zh-TW">TRADITIONAL CHINESE (繁中)</option>
+                        <option value="ja">JAPANESE (日文)</option>
+                        <option value="ko">KOREAN (韓文)</option>
+                    </select>
+                </div>
+                
+                <!-- 超炫的互換按鈕 -->
+                <button @click="swapLang" class="px-4 py-2 bg-black border border-cyber-primary/50 text-cyber-primary rounded hover:bg-cyber-primary hover:text-black transition-all group mx-2">
+                    <svg class="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                </button>
+                
+                <div class="flex-1 flex justify-center">
+                    <select v-model="langTo" class="bg-transparent text-cyber-secondary font-mono text-sm outline-none cursor-pointer text-center appearance-none w-full">
+                        <option value="zh-TW">TRADITIONAL CHINESE (繁中)</option>
+                        <option value="en">ENGLISH (英文)</option>
+                        <option value="ja">JAPANESE (日文)</option>
+                        <option value="ko">KOREAN (韓文)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 輸入與輸出區塊 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 h-[350px]">
+                
+                <!-- 輸入區 -->
+                <div class="neon-box bg-cyber-card/80 backdrop-blur rounded-lg p-1 flex flex-col relative group">
+                    <div class="bg-black/50 p-2 border-b border-cyber-primary/30 flex justify-between items-center">
+                        <span class="text-[10px] font-mono text-cyber-primary uppercase tracking-widest">INPUT_DATA</span>
+                        <span class="text-[10px] font-mono text-slate-500">{{ sourceText.length }} CHARS</span>
+                    </div>
+                    <textarea 
+                        v-model="sourceText" 
+                        placeholder="請輸入欲解析之訊號..."
+                        class="w-full flex-1 bg-transparent p-4 text-slate-200 font-sans focus:outline-none resize-none"
+                    ></textarea>
+                </div>
+
+                <!-- 輸出區 (打字機特效) -->
+                <div class="border border-cyber-secondary/50 shadow-[0_0_15px_rgba(254,1,154,0.1)] bg-cyber-card/80 backdrop-blur rounded-lg p-1 flex flex-col relative">
+                    <div class="bg-black/50 p-2 border-b border-cyber-secondary/30 flex justify-between items-center">
+                        <span class="text-[10px] font-mono text-cyber-secondary uppercase tracking-widest">DECODED_OUTPUT</span>
+                        <!-- 一鍵複製按鈕 -->
+                        <button v-if="displayOutput" @click="copyText" class="text-[10px] font-mono bg-cyber-secondary/20 text-cyber-secondary hover:bg-cyber-secondary hover:text-white px-2 py-0.5 rounded transition">
+                            {{ copySuccess ? 'COPIED!' : 'COPY' }}
+                        </button>
+                    </div>
+                    
+                    <div class="w-full flex-1 bg-transparent p-4 text-slate-100 font-sans overflow-y-auto relative">
+                        <!-- 骨架屏 / Loading -->
+                        <div v-if="isLoading" class="absolute inset-0 flex flex-col items-center justify-center text-cyber-secondary bg-black/40 backdrop-blur-sm z-10">
+                            <span class="text-3xl animate-spin mb-2">⚙️</span>
+                            <span class="font-mono text-xs tracking-widest animate-pulse">DECODING SIGNAL...</span>
+                        </div>
+                        
+                        <!-- 打字機文字顯示 -->
+                        <p class="text-lg leading-relaxed whitespace-pre-wrap">
+                            {{ displayOutput }}<span v-if="isTyping" class="cursor-blink text-cyber-secondary">█</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 執行按鈕 -->
+            <button 
+                @click="translateText" 
+                :disabled="isLoading || !sourceText.trim()"
+                class="w-full py-4 bg-cyber-primary/10 border border-cyber-primary text-cyber-primary font-mono text-sm uppercase tracking-[0.2em] hover:bg-cyber-primary hover:text-black hover:shadow-[0_0_25px_rgba(0,242,254,0.6)] transition-all duration-300 rounded font-bold disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
+            >
+                <div class="absolute inset-0 bg-cyber-primary w-0 group-hover:w-full transition-all duration-500 ease-out opacity-20"></div>
+                <span v-if="!isLoading" class="relative z-10 flex items-center justify-center gap-2">
+                    <span class="text-xl">⚡</span> 啟動神經翻譯引擎 (EXECUTE)
+                </span>
+                <span v-else class="relative z-10 text-cyber-secondary neon-text-pink">
+                    連線至 MYMEMORY API...
+                </span>
+            </button>
+        </div>
+
+        <!-- 右側：歷史紀錄面板 (佔 4 格) -->
+        <div class="lg:col-span-4 bg-cyber-card/60 backdrop-blur border border-cyber-border rounded-lg flex flex-col h-[500px] lg:h-auto overflow-hidden shadow-2xl">
+            <div class="bg-black/80 p-4 border-b border-cyber-border flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                    <span class="text-cyber-neon">≡</span>
+                    <span class="font-mono text-xs uppercase tracking-widest text-slate-300">LOCAL_HISTORY</span>
+                </div>
+                <button @click="clearHistory" v-if="history.length" class="text-[10px] text-red-400 hover:text-red-300 font-mono tracking-widest">
+                    [PURGE_DATA]
+                </button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+                <div v-if="history.length === 0" class="text-center py-10 opacity-30">
+                    <span class="text-3xl block mb-2">📭</span>
+                    <span class="font-mono text-[10px] tracking-widest">NO DATA FOUND</span>
+                </div>
+
+                <!-- 歷史紀錄列表 -->
+                <transition-group name="list">
+                    <div 
+                        v-for="(item, index) in history" 
+                        :key="item.id"
+                        class="bg-black/40 border border-cyber-border hover:border-cyber-primary/50 p-3 rounded group cursor-pointer transition-colors relative overflow-hidden"
+                        @click="loadHistory(item)"
+                    >
+                        <div class="flex justify-between items-center mb-2 pb-1 border-b border-cyber-border/50">
+                            <span class="text-[9px] font-mono text-cyber-primary bg-cyber-primary/10 px-1.5 rounded">{{ item.langPair }}</span>
+                            <span class="text-[9px] font-mono text-slate-500">{{ item.time }}</span>
+                        </div>
+                        <p class="text-xs text-slate-300 truncate mb-1">{{ item.source }}</p>
+                        <p class="text-xs text-cyber-secondary truncate">{{ item.result }}</p>
+                    </div>
+                </transition-group>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, computed, watch, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            const sourceText = ref('');
+            const langFrom = ref('en');
+            const langTo = ref('zh-TW');
+            
+            const rawOutput = ref(''); // API 原始回傳結果
+            const displayOutput = ref(''); // 畫面上打字機正在顯示的文字
+            const isTyping = ref(false);
+            const isLoading = ref(false);
+            const copySuccess = ref(false);
+            
+            // 讀取 LocalStorage 歷史紀錄 (業界實戰技巧)
+            const history = ref(JSON.parse(localStorage.getItem('cyber_translator_history') || '[]'));
+
+            // 監聽歷史紀錄變化，自動存入瀏覽器
+            watch(history, (newVal) => {
+                localStorage.setItem('cyber_translator_history', JSON.stringify(newVal));
+            }, { deep: true });
+
+            const langPair = computed(() => `${langFrom.value}|${langTo.value}`);
+
+            // 語言互換功能
+            const swapLang = () => {
+                const temp = langFrom.value;
+                langFrom.value = langTo.value;
+                langTo.value = temp;
+                // 若有輸入文字，也順便互換輸入與輸出
+                if (displayOutput.value && !isTyping.value) {
+                    sourceText.value = displayOutput.value;
+                    displayOutput.value = '';
+                }
+            };
+
+            // 打字機特效函數 (Typewriter)
+            const startTypewriter = (text) => {
+                displayOutput.value = '';
+                isTyping.value = true;
+                let i = 0;
+                
+                // 根據字數決定打字速度，字越多越快
+                const speed = text.length > 50 ? 10 : 30; 
+
+                const typing = setInterval(() => {
+                    if (i < text.length) {
+                        displayOutput.value += text.charAt(i);
+                        i++;
+                    } else {
+                        clearInterval(typing);
+                        isTyping.value = false;
+                        saveToHistory(); // 打字完成後存入歷史紀錄
+                    }
+                }, speed);
+            };
+
+            // 老師指定的核心功能：fetch + async/await
+            const translateText = async () => {
+                if (!sourceText.value.trim()) return;
+
+                isLoading.value = true;
+                displayOutput.value = '';
+                copySuccess.value = false;
+                
+                try {
+                    const query = encodeURIComponent(sourceText.value.trim());
+                    const url = `https://api.mymemory.translated.net/get?q=${query}&langpair=${langPair.value}`;
+                    
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error('API ERROR');
+                    
+                    const data = await response.json();
+                    
+                    if (data.responseData && data.responseData.translatedText) {
+                        rawOutput.value = data.responseData.translatedText;
+                    } else {
+                        rawOutput.value = "解碼失敗：請確認網路狀態。";
+                    }
+
+                } catch (error) {
+                    console.error(error);
+                    rawOutput.value = "[系統嚴重錯誤] 伺服器連線中斷。";
+                } finally {
+                    isLoading.value = false;
+                    // 獲得資料後，觸發打字機特效
+                    startTypewriter(rawOutput.value);
+                }
+            };
+
+            // 儲存至歷史紀錄
+            const saveToHistory = () => {
+                const newItem = {
+                    id: Date.now(),
+                    time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: "numeric", minute: "numeric", second: "numeric" }),
+                    langPair: langPair.value.replace('|', '➔').toUpperCase(),
+                    source: sourceText.value,
+                    result: rawOutput.value
+                };
+                history.value.unshift(newItem); // 加在最前面
+                // 最多保留 15 筆，避免塞爆 LocalStorage
+                if (history.value.length > 15) history.value.pop();
+            };
+
+            // 點擊歷史紀錄載回輸入框
+            const loadHistory = (item) => {
+                // 拆解語言對 (例如 EN➔ZH-TW) 回 select 選項
+                const langs = item.langPair.toLowerCase().split('➔');
+                langFrom.value = langs[0];
+                langTo.value = langs[1];
+                
+                sourceText.value = item.source;
+                displayOutput.value = item.result;
+                isTyping.value = false; // 直接顯示，不跑打字機
+            };
+
+            const clearHistory = () => {
+                if(confirm('警告：確定要清除所有本地歷史紀錄嗎？')) {
+                    history.value = [];
+                }
+            };
+
+            // 一鍵複製 API
+            const copyText = async () => {
+                try {
+                    await navigator.clipboard.writeText(displayOutput.value);
+                    copySuccess.value = true;
+                    setTimeout(() => copySuccess.value = false, 2000);
+                } catch (err) {
+                    alert('複製失敗');
+                }
+            };
+
+            return {
+                sourceText, langFrom, langTo, displayOutput, isLoading, isTyping, copySuccess, history,
+                translateText, swapLang, copyText, clearHistory, loadHistory
+            };
+        }
+    }).mount('#app');
+</script>
+
+</body>
+</html>
